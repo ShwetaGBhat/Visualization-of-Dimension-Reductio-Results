@@ -1,0 +1,179 @@
+---
+title: "Visualization of dimension reduction Results"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+## Team Members:
+##Rashmi Raju Koparde -230322
+##Sathya Sudha Murugan-229638
+##Shweta Bhat - 229530
+
+
+Loading libraries.
+```{r}
+library(readxl)
+library(data.table)
+library(plyr)
+library(ggbiplot)
+library(ggfortify)
+library(embed)
+library(readr)
+library(tidytext)
+library(plotly)
+library(forcats)
+library(tidyverse)
+library(ggplot2)
+library(Rtsne)
+library(umap)
+
+```
+
+
+##Loading data.
+
+
+```{r echo=FALSE}
+dataset <- read_csv("/Users/shwetabhat/Downloads/VisualizationPRJ/Data_transposed.csv")
+```
+##Applying countour on PCA
+```{r}
+df <- dataset
+df=dataset[,c(1,2,4:ncol(dataset))]
+
+  
+pca_gucci <- recipe(~., data = dataset) %>%
+  update_role(pathology, new_role = "id") %>%
+  step_normalize(all_predictors()) %>%
+  step_pca(all_predictors())
+
+pca_prep <- prep(pca_gucci)
+
+tidied_pca <- tidy(pca_prep, 2)
+
+x=tidied_pca %>%
+  filter(component %in% paste0("PC", 1:5)) %>%
+  group_by(component) %>%
+  mutate(component = fct_inorder(component))
+x=pivot_wider(tidied_pca,names_from=component,values_from = value)
+x$terms=NULL
+x$id=NULL
+
+
+fig <- plot_ly(x, x = ~PC1, y = ~PC2, z = ~PC3, type = "contour",
+               width = 600, height = 500,contours = list(showlabels = TRUE),color = I("black"))
+fig %>% colorbar(title = "PC3") 
+```
+##Applying scatter plot on PCA.
+
+```{r}
+juice(pca_prep) %>%
+  ggplot(aes(PC1, PC2, PC3,fill=pathology)) +
+  geom_point(aes(color = pathology), alpha = 0.7, size = 2) + 
+  #stat_ellipse(geom="polygon",col="black",alpha=0.1)+
+  scale_color_manual(values=c("#31a354","#2b8cbe", "#fc9272"))
+```
+
+##Applying U-MAP on dataset and ScatterPlot.
+
+
+```{r}
+
+umap_rec <- recipe(~., data = dataset) %>%
+  update_role(pathology, new_role = "id") %>%
+  step_normalize(all_predictors()) %>%
+  step_umap(all_predictors())
+
+umap_prep <- prep(umap_rec)
+juice(umap_prep)%>%
+  ggplot(aes(umap_1, umap_2,fill=pathology)) +
+  geom_point(aes(color = pathology), alpha = 0.7, size = 2) +
+  #stat_ellipse(geom="polygon",col="black",alpha=0.1)+
+  scale_color_manual(values=c("#31a354","#2b8cbe", "#fc9272"))
+
+```
+
+
+##Applying Contour on U-Map.
+
+```{r}
+
+data.umap = umap(df, n_components=3)
+dims_umap <- data.umap$layout
+colnames(dims_umap) <- c("UMAP1", "UMAP2","UMAP3")
+
+df_out = as.data.frame(dims_umap)
+
+
+fig <- plot_ly(df_out, x = df_out$UMAP1, y = df_out$UMAP2, z = df_out$UMAP3, type = "contour", width = 600, height = 500,contours = list(showlabels = TRUE),color = I("black"))
+fig %>% colorbar(title = "UMAP")
+
+```
+
+##Applying t-SNE on dataset and Contour on T-SNE.
+
+```{r}
+dat.active <- df
+tsne_out <- Rtsne(dat.active, dims = 3, perplexity=30, verbose=TRUE, max_iter = 500)
+
+t=data.frame(tsne1=tsne_out$Y[,1],tsne2=tsne_out$Y[,2],tsne3=tsne_out$Y[,3])#,pathology=dataset$pathology)
+
+fig <- plot_ly(t, x = t$tsne1, y = t$tsne2, z = t$tsne3, type = "contour", width = 600, height = 500,contours = list(showlabels = TRUE),color = I("black"))
+fig %>% colorbar(title = "Tsne3")
+
+```
+
+##Scatter Plot on tsne.
+
+
+```{r}
+t=data.frame(tsne1=tsne_out$Y[,1],tsne2=tsne_out$Y[,2],tsne3=tsne_out$Y[,3],pathology=dataset$pathology)
+
+t%>%ggplot(aes(tsne1, tsne2,fill=pathology)) +
+  geom_point(aes(color = pathology), alpha = 0.7, size = 2) +
+  #stat_ellipse(geom="polygon",col="black",alpha=0.1)+
+  scale_color_manual(values=c("#31a354","#2b8cbe", "#fc9272"))
+
+
+```
+
+##hyper Prarmetre tuning.
+
+
+```{r}
+set.seed(1) # for reproducibility
+perpl=30
+iterations=500
+learning=200
+
+perpl <- c(30,35)
+i=1
+  tsne_out <- Rtsne(df, dims = 3, perplexity=perpl[i], verbose=TRUE, max_iter=iterations, eta=learning)
+  t=data.frame(tsne1=tsne_out$Y[,1],tsne2=tsne_out$Y[,2],tsne3=tsne_out$Y[,3])#,pathology=dataset$pathology)
+  fig <- plot_ly(t, x = t$tsne1, y = t$tsne2, z = t$tsne3, type = "contour", width = 600, height = 500,contours = list(showlabels = TRUE),color = I("black"))
+  fig %>% colorbar(title = "Tsne3")
+i=i+1
+
+  tsne_out <- Rtsne(df, dims = 3, perplexity=perpl[i], verbose=TRUE, max_iter=iterations, eta=learning)
+  t=data.frame(tsne1=tsne_out$Y[,1],tsne2=tsne_out$Y[,2],tsne3=tsne_out$Y[,3])#,pathology=dataset$pathology)
+  fig <- plot_ly(t, x = t$tsne1, y = t$tsne2, z = t$tsne3, type = "contour", width = 600, height = 500,contours = list(showlabels = TRUE),color = I("black"))
+  fig %>% colorbar(title = "Tsne3")
+
+```
+
+##References:
+
+```{r}
+#https://cran.r-project.org/web/packages/ggfortify/vignettes/plot_pca.html
+#https://juliasilge.com/blog/cocktail-recipes-umap/
+#https://jkzorz.github.io/2020/02/29/contour-plots.html
+#https://www.r-statistics.com/2016/07/using-2d-contour-plots-within-ggplot2-to-visualize-relationships-between-three-variables/
+```
+
+
